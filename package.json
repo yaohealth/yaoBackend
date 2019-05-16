@@ -12,6 +12,7 @@
     "run:prod": "node /dist/index.js"
   },
   "dependencies": {
+    "csv-parser": "^2.3.0",
     "dotenv": "^8.0.0",
     "express": "^4.16.4",
     "express-basic-auth": "^1.2.0",
