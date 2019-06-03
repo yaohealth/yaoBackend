@@ -7,9 +7,9 @@
   "license": "MIT",
   "scripts": {
     "watch:dev": "parcel index.ts --target node",
-    "run:dev:debug": "nodemon --inspect-brk dist/index.js",
-    "run:dev": "nodemon dist/index.js",
-    "run:prod": "node /dist/index.js"
+    "dev:debug": "nodemon --inspect-brk dist/index.js",
+    "dev": "nodemon dist/index.js",
+    "prod": "node /dist/index.js"
   },
   "dependencies": {
     "csv-parser": "^2.3.0",
