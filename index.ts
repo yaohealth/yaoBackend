@@ -13,10 +13,10 @@ const password = process.env.ADMINPW
 const knex = require('knex')({
     client: 'pg',
     connection: {
-        host : process.env.DBHOST,
-        user : process.env.DBUSER,
-        password : process.env.DBPW,
-        database : process.env.DB
+        host: process.env.DBHOST,
+        user: process.env.DBUSER,
+        password: process.env.DBPW,
+        database: process.env.DB
     }
 })
 
@@ -72,13 +72,13 @@ app.get('/doctors/specialities', (req, res) => {
     const therapies = qs.parse(req.query)
 
     for(const therapie of therapies.Therapy) {
-        queries.push(knex.select().from('doctorprofile')
-            .innerJoin('doctorspeciality', 'doctorprofile.iddoctorprofile' ,'doctorspeciality.iddoctorprofile')
-            .innerJoin('speciality', 'doctorspeciality.idspeciality', 'speciality.idspeciality')
-            .where('speciality', therapie))
+        // get all doctors with specified speciality and then return all these doctors with all their specialities
+        queries.push(knex.raw(`select * from doctorprofile join doctorspeciality on (doctorprofile.iddoctorprofile = doctorspeciality.iddoctorprofile) join speciality on (doctorspeciality.idspeciality = speciality.idspeciality) 
+        where doctorprofile.iddoctorprofile in (select doctorprofile.iddoctorprofile from doctorprofile join doctorspeciality on (doctorprofile.iddoctorprofile = doctorspeciality.iddoctorprofile) join speciality on (doctorspeciality.idspeciality = speciality.idspeciality) 
+        where speciality = '${therapie}')`))
     }
     Promise.all(queries).then(data => {
-        res.send(mergeDocs(mergeDocs(data)))
+        res.send(mergeDocs(mergeDocs(data[0].rows)))
     }).catch(error => {
         console.log(error)
         res.send(error)
