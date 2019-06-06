@@ -3,6 +3,7 @@ require('dotenv').config()
 import {NextFunction} from 'express'
 import qs from 'qs'
 import lodash from 'lodash'
+import got from 'got'
 
 const express = require('express')
 const app = express()
@@ -37,12 +38,45 @@ app.use(basicAuth({
     users: { [user]: password }
 }))
 
+app.use( require('body-parser').json())
+
+/*
+ * Helper Functions
+ */
+
+function mergeDocs(docs) {
+    docs = lodash.flatten(docs)
+    const ids = lodash.uniq(docs.map(doc => doc.iddoctorprofile))
+    const result = []
+    let tmp
+
+    for(const id of ids) {
+        tmp = docs.filter(doc => doc.iddoctorprofile === id)
+        if(tmp.length === 1){
+            result.push(tmp)
+        } else if(tmp.length > 1){
+            result.push(lodash.mapValues(tmp[0], (value, key) => {
+                if(key === 'speciality' || key === "idspeciality") {
+                    return lodash.map(tmp, key)
+                } else {
+                    return value
+                }
+            }))
+        }
+    }
+    return lodash.flatten(result)
+}
+
 const logRequestStart = (req: Request, res: Response, next: NextFunction) => {
     console.info(`${req.method} ${req.url}`)
     next()
 }
 
 app.use(logRequestStart)
+
+/*
+ * YAO API
+ */
 
 app.get('/',  (req, res) => res.send('yao api'))
 
@@ -115,26 +149,48 @@ app.listen(3000, function () {
     console.log('Example app listening on port 3000!')
 })
 
-function mergeDocs(docs) {
-    docs = lodash.flatten(docs)
-    const ids = lodash.uniq(docs.map(doc => doc.iddoctorprofile))
-    const result = []
-    let tmp
+/*
+ * Acuitiy Booking API
+ */
 
-    for(const id of ids) {
-        tmp = docs.filter(doc => doc.iddoctorprofile === id)
-        if(tmp.length === 1){
-            result.push(tmp)
-        } else if(tmp.length > 1){
-            result.push(lodash.mapValues(tmp[0], (value, key) => {
-                if(key === 'speciality' || key === "idspeciality") {
-                    return lodash.map(tmp, key)
-                } else {
-                    return value
-                }
-            }))
-        }
+app.get('/acuity/appointment-types', async (req, res) => {
+    const response = await got('https://acuityscheduling.com/api/v1/appointment-types', {auth: `${process.env.ACUITYUSER}:${process.env.ACUITYPW}`}).catch(err => {
+        console.error(err)
+        res.send(err)
+    })
+    res.send(response.body)
+})
+
+app.get('/acuity/availability/dates', async (req, res) => {
+    try {
+        const parsedQuery = qs.parse(req.query)
+        const query = new URLSearchParams(parsedQuery);
+        const response = await got(`https://acuityscheduling.com/api/v1/availability/dates`, {query, auth: `${process.env.ACUITYUSER}:${process.env.ACUITYPW}`})
+        res.send(response.body)
+    } catch(e) {
+        console.error(e)
+        res.send(e)
     }
-    return lodash.flatten(result)
-}
+})
 
+app.get('/acuity/availability/times', async (req, res) => {
+    try {
+        const parsedQuery = qs.parse(req.query)
+        const query = new URLSearchParams(parsedQuery);
+        const response = await got(`https://acuityscheduling.com/api/v1/availability/times`, {query, auth: `${process.env.ACUITYUSER}:${process.env.ACUITYPW}`})
+        res.send(response.body)
+    } catch(e) {
+        console.error(e)
+        res.send(e)
+    }
+})
+
+app.post('/acuity/appointments', async (req, res) => {
+    try {
+        const response = await got.post(`https://acuityscheduling.com/api/v1/appointments`, { body: JSON.stringify(req.body), auth: `${process.env.ACUITYUSER}:${process.env.ACUITYPW}`})
+        res.send(response.body)
+    } catch(e) {
+        console.error(e)
+        res.send(e)
+    }
+})
