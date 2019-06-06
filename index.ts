@@ -87,18 +87,37 @@ app.get('/doctors', (req, res) => {
         .then( data => {
             return res.send(mergeDocs(data))
         })
+        .catch(err => {
+            console.error(err)
+            res.status(404).send(err)
+        })
 })
 
 app.get('/symptoms', (req, res) => {
-    knex.select().from('symptoms').then(data => res.send(data))
+    knex.select().from('symptoms')
+        .then(data => res.send(data))
+        .catch(err => {
+            console.error(err)
+            res.status(404).send(err)
+        })
 })
 
 app.get('/specialities', (req, res) => {
-    knex.select().from('speciality').then( data => res.send(data))
+    knex.select().from('speciality')
+        .then( data => res.send(data))
+        .catch(err => {
+            console.error(err)
+            res.status(404).send(err)
+        })
 })
 
 app.get('/doctors/description/:iddoctorprofile', (req, res) => {
-    knex.select().from('description').where('iddoctorprofile', req.params.iddoctorprofile).then( data => res.send(data))
+    knex.select().from('description').where('iddoctorprofile', req.params.iddoctorprofile)
+        .then( data => res.send(data))
+        .catch(err => {
+            console.error(err)
+            res.status(404).send(err)
+        })
 })
 
 app.get('/doctors/specialities', (req, res) => {
@@ -115,12 +134,17 @@ app.get('/doctors/specialities', (req, res) => {
         res.send(mergeDocs(mergeDocs(data[0].rows)))
     }).catch(error => {
         console.log(error)
-        res.send(error)
+        res.status(404).send(error)
     })
 })
 
 app.post('/subscription/:email', (req, res) => {
-    knex('subscriptions').insert({ email: req.params.email }).then(data => res.send(data), error => res.send(error))
+    knex('subscriptions').insert({ email: req.params.email })
+        .then(data => res.send(data))
+        .catch(err => {
+            console.error(err)
+            res.status(404).send(err)
+        })
 })
 
 app.get('/therapies/symptoms', (req, res) => {
@@ -142,7 +166,10 @@ app.get('/therapies/symptoms', (req, res) => {
             }
         })
         res.send(result)
-    }).catch(error => res.send(error))
+    }).catch(err => {
+        console.error(err)
+        res.status(404).send(err)
+    })
 })
 
 app.listen(3000, function () {
@@ -153,44 +180,43 @@ app.listen(3000, function () {
  * Acuitiy Booking API
  */
 
-app.get('/acuity/appointment-types', async (req, res) => {
-    const response = await got('https://acuityscheduling.com/api/v1/appointment-types', {auth: `${process.env.ACUITYUSER}:${process.env.ACUITYPW}`}).catch(err => {
-        console.error(err)
-        res.send(err)
-    })
-    res.send(response.body)
+app.get('/acuity/appointment-types', (req, res) => {
+    got('https://acuityscheduling.com/api/v1/appointment-types', {auth: `${process.env.ACUITYUSER}:${process.env.ACUITYPW}`})
+        .then(response => res.send(response.body))
+        .catch(err => {
+            console.error(err)
+            res.status(404).send(err)
+        })
 })
 
-app.get('/acuity/availability/dates', async (req, res) => {
-    try {
-        const parsedQuery = qs.parse(req.query)
-        const query = new URLSearchParams(parsedQuery);
-        const response = await got(`https://acuityscheduling.com/api/v1/availability/dates`, {query, auth: `${process.env.ACUITYUSER}:${process.env.ACUITYPW}`})
-        res.send(response.body)
-    } catch(e) {
-        console.error(e)
-        res.send(e)
-    }
+app.get('/acuity/availability/dates', (req, res) => {
+    const parsedQuery = qs.parse(req.query)
+    const query = new URLSearchParams(parsedQuery);
+    got(`https://acuityscheduling.com/api/v1/availability/dates`, {query, auth: `${process.env.ACUITYUSER}:${process.env.ACUITYPW}`})
+        .then(response => res.send(response.body))
+        .catch(err => {
+            console.error(err)
+            res.status(404).send(err)
+        })
+
 })
 
-app.get('/acuity/availability/times', async (req, res) => {
-    try {
-        const parsedQuery = qs.parse(req.query)
-        const query = new URLSearchParams(parsedQuery);
-        const response = await got(`https://acuityscheduling.com/api/v1/availability/times`, {query, auth: `${process.env.ACUITYUSER}:${process.env.ACUITYPW}`})
-        res.send(response.body)
-    } catch(e) {
-        console.error(e)
-        res.send(e)
-    }
+app.get('/acuity/availability/times',  (req, res) => {
+    const parsedQuery = qs.parse(req.query)
+    const query = new URLSearchParams(parsedQuery);
+    got(`https://acuityscheduling.com/api/v1/availability/times`, {query, auth: `${process.env.ACUITYUSER}:${process.env.ACUITYPW}`})
+        .then(response => res.send(response.body))
+        .catch(err => {
+            console.error(err)
+            res.status(404).send(err)
+        })
 })
 
-app.post('/acuity/appointments', async (req, res) => {
-    try {
-        const response = await got.post(`https://acuityscheduling.com/api/v1/appointments`, { body: JSON.stringify(req.body), auth: `${process.env.ACUITYUSER}:${process.env.ACUITYPW}`})
-        res.send(response.body)
-    } catch(e) {
-        console.error(e)
-        res.send(e)
-    }
+app.post('/acuity/appointments',(req, res) => {
+    got.post(`https://acuityscheduling.com/api/v1/appointments`, { body: JSON.stringify(req.body), auth: `${process.env.ACUITYUSER}:${process.env.ACUITYPW}`})
+        .then(response => res.send(response.body))
+        .catch(err => {
+            console.error(err)
+            res.status(404).send(err)
+        })
 })
