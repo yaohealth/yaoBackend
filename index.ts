@@ -14,9 +14,9 @@ const password = process.env.ADMINPW
 const knex = require('knex')({
     client: 'pg',
     connection: {
-        host: process.env.DBHOST,
-        user: process.env.DBUSER,
-        password: process.env.DBPW,
+        host: process.env.NODE_ENV==='production' ? process.env.PRODDBHOST : process.env.DEVDBHOST,
+        user: process.env.NODE_ENV==='production' ? process.env.PRODDBUSER : process.env.DEVDBUSER,
+        password: process.env.NODE_ENV==='production' ? process.env.PRODDBPW : process.env.DEVDBPW,
         database: process.env.DB
     }
 })
