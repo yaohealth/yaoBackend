@@ -3,20 +3,23 @@ require('dotenv').config()
 const knex = require('knex')({
     client: 'pg',
     connection: {
-        host: process.env.DBHOST,
-        user: process.env.DBUSER,
-        password: process.env.DBPW,
-        database: 'test'
+        host: process.env.PRODDBHOST,
+        user: process.env.PRODDBUSER,
+        password: process.env.PRODDBPW,
+        database: process.env.DB
     }
 })
 
+
+// TODO test if unique stuff works
 async function createYaoDB() {
     await knex.schema.createTable('users', table => {
         table.bigIncrements('iduser').notNullable()
-        table.string('email').notNullable()
+        table.string('email').unique().notNullable()
         table.string('password').notNullable()
+        table.boolean('admin').notNullable()
         table.boolean('enabled').notNullable()
-        table.timestamp('createdat').notNullable()
+        table.date('createdat').notNullable()
         //check if we maybe want some other format
 
 
@@ -24,7 +27,7 @@ async function createYaoDB() {
 
     await knex.schema.createTable('doctorprofile', table => {
         table.bigIncrements('iddoctorprofile').notNullable()
-        table.bigInteger('iduser').notNullable().references('iduser').inTable('users')
+        table.bigInteger('iduser').unique().notNullable().references('iduser').inTable('users')
         table.string('firstname').notNullable()
         table.string('lastname').notNullable()
         table.string('title').notNullable()
@@ -56,7 +59,7 @@ async function createYaoDB() {
 
     await knex.schema.createTable('speciality', table => {
         table.bigIncrements('idspeciality').notNullable()
-        table.string('speciality').notNullable()
+        table.string('speciality').unique().notNullable()
     }).catch(error => console.error(error))
 
     await knex.schema.createTable('doctorspeciality', table => {
@@ -67,18 +70,19 @@ async function createYaoDB() {
 
     await knex.schema.createTable('symptoms', table => {
         table.bigIncrements('idsymptoms').notNullable()
-        table.string('symptoms').notNullable()
+        table.string('symptom').unique().notNullable()
     }).catch(error => console.error(error))
 
     await knex.schema.createTable('symptomsspeciality', table => {
         table.bigIncrements('idsymptomsspeciality').notNullable()
-        table.bigInteger('idsymptoms').notNullable().references('iddoctorprofile').inTable('doctorprofile')
+        table.bigInteger('idsymptoms').notNullable().references('idsymptoms').inTable('symptoms')
         table.bigInteger('idspeciality').notNullable().references('idspeciality').inTable('speciality')
+        table.unique(['idsymptoms', 'idspeciality'])
     }).catch(error => console.error(error))
 
     await knex.schema.createTable('subscriptions', table => {
         table.increments('idsubscriptions').notNullable()
-        table.string('email').notNullable()
+        table.string('email').unique().notNullable()
     }).catch(error => console.error(error))
 }
 
