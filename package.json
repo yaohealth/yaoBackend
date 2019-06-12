@@ -10,7 +10,8 @@
     "dev:debug": "nodemon --inspect-brk dist/index.js",
     "dev": "NODE_ENV=development nodemon dist/index.js",
     "build": "parcel build index.ts --target node",
-    "prod": "NODE_ENV=production node dist/index.js"
+    "prod": "NODE_ENV=production node dist/index.js",
+    "prod:debug": "NODE_ENV=production node --inspect-brk dist/index.js"
   },
   "dependencies": {
     "body-parser": "^1.19.0",

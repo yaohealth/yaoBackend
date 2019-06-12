@@ -131,7 +131,7 @@ app.get('/doctors/specialities', (req, res) => {
         where speciality = '${therapie}')`))
     }
     Promise.all(queries).then(data => {
-        res.send(mergeDocs(mergeDocs(data[0].rows)))
+        res.send(mergeDocs(data.map(data => data.rows)))
     }).catch(error => {
         console.log(error)
         res.status(404).send(error)
