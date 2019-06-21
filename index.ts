@@ -4,12 +4,16 @@ import {NextFunction} from 'express'
 import qs from 'qs'
 import lodash from 'lodash'
 import got from 'got'
+import cors from 'cors'
+import * as jwt from 'jsonwebtoken'
+import * as bcrypt from 'bcrypt'
 
 const express = require('express')
 const app = express()
-const basicAuth = require('express-basic-auth')
-const user = process.env.ADMINUSER
-const password = process.env.ADMINPW
+const cookieParser = require('cookie-parser')
+const expressjwt = require('express-jwt')
+
+const saltRounds = 10
 
 const knex = require('knex')({
     client: 'pg',
@@ -21,24 +25,35 @@ const knex = require('knex')({
     }
 })
 
-app.use( (req, res, next) => {
-    res.header("Access-Control-Allow-Origin", "*")
-    res.header(
-        "Access-Control-Allow-Headers",
-        "Origin, X-Requested-With, Content-Type, Accept, Authorization"
-    )
-    if (req.method === 'OPTIONS') {
-        res.header('Access-Control-Allow-Methods', 'PUT, POST, PATCH, DELETE, GET')
-        return res.status(200).json({})
-    }
-    next()
-})
+app.use(cors())
+app.options('*', cors())
 
-app.use(basicAuth({
-    users: { [user]: password }
-}))
+app.use(logRequestStart)
 
 app.use( require('body-parser').json())
+app.use(cookieParser())
+app.use(
+    expressjwt({
+        secret: process.env.JWTPRIVATE
+    }).unless({
+        path: [
+            // use regex if params are expected in that path
+            '/auth/user',
+            '/auth/login',
+            '/doctors',
+            '/symptoms',
+            '/specialities',
+            '/doctors/specialities',
+            /^\/doctors\/description\/.*/,
+            /^\/subscription\/.*/,
+            '/therapies/symptoms',
+            '/acuity/appointment-types',
+            '/acuity/availability/dates',
+            '/acuity/availability/times',
+            '/acuity/appointments'
+        ]
+    })
+)
 
 /*
  * Helper Functions
@@ -67,12 +82,10 @@ function mergeDocs(docs) {
     return lodash.flatten(result)
 }
 
-const logRequestStart = (req: Request, res: Response, next: NextFunction) => {
+function logRequestStart(req: Request, res: Response, next: NextFunction) {
     console.info(`${req.method} ${req.url}`)
     next()
 }
-
-app.use(logRequestStart)
 
 /*
  * YAO API
@@ -171,6 +184,86 @@ app.get('/therapies/symptoms', (req, res) => {
         res.status(404).send(err)
     })
 })
+
+app.post('/users/register', (req, res) => {
+    if(req.body && req.body.email && req.body.password) {
+        bcrypt.hash(req.body.password, saltRounds, function(err, hash) {
+            if(!err) {
+                // TODO catch unique error
+                knex('users')
+                    .insert({
+                        email: req.body.email,
+                        password: hash,
+                        enabled: true,
+                        createdat: new Date().toISOString()
+                    })
+                    .then(result => res.send(result))
+                    .catch(err => res.status(404).send(err))
+            } else {
+                res.status(404).send(err)
+            }
+        })
+    }
+})
+
+app.post('/auth/login', (req, res) => {
+    const username = req.body.username
+    const password = req.body.password
+    if (!username || !password) {
+        return res.status(400).json({type: 'error', message: 'username and password fields are essential for authentication.'})
+    } else {
+        knex.select().from('users').where('email', username)
+            .then(user => {
+                if(user.length === 1) {
+                    bcrypt.compare(password, user[0].password)
+                        .then(data => {
+                            if(data) {
+                                jwt.sign({user: {email: user[0].email, id: user[0].iduser}}, process.env.JWTPRIVATE, {expiresIn: '7h'}, (err, encoded) => {
+                                    res.send({
+                                        type: 'success',
+                                        message: 'User logged in.',
+                                        user: {email: user[0].email, id: user[0].iduser},
+                                        token: encoded
+                                    })
+                                })
+                            } else {
+                                return res.status(403).json({type: 'error', message: 'Wrong email or password'})
+                            }
+                        }).catch(err => {
+                        console.log(err)
+                        return res.status(500).json({type: 'error', message: 'bcrypt error', err})
+                    })
+                } else {
+                    res.status(403).json({type: 'error', message: 'Wrong email or password'})
+                }
+            })
+    }
+})
+
+app.get('/me', (req, res) => {
+    let token = req.headers.authorization
+    token = token.split(' ')
+    if (!token) {
+        return res.status(400).json({type: 'error', message: 'x-access-token header not found.'})
+    }
+    jwt.verify(token[1], process.env.JWTPRIVATE, (error, result) => {
+        if (error) {
+            return res.status(403).json({type: 'error', message: 'Provided token is invalid.', error})
+        }
+        console.log(result)
+        return res.json({
+            type: 'success',
+            message: 'Provided token is valid.',
+            result
+        })
+    })
+})
+
+// DANGEROUS just for admins!!!!!!!!!!!!!
+// app.get('/users', (req, res) => {
+//     knex.select().from('users')
+//         .then(data => res.send(data))
+// })
 
 app.listen(3000, function () {
     console.log('Example app listening on port 3000!')

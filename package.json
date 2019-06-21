@@ -14,12 +14,17 @@
     "prod:debug": "NODE_ENV=production node --inspect-brk dist/index.js"
   },
   "dependencies": {
+    "bcrypt": "^3.0.6",
     "body-parser": "^1.19.0",
+    "cookie-parser": "^1.4.4",
+    "cors": "^2.8.5",
     "csv-parser": "^2.3.0",
     "dotenv": "^8.0.0",
     "express": "^4.16.4",
     "express-basic-auth": "^1.2.0",
+    "express-jwt": "^5.3.1",
     "got": "^9.6.0",
+    "jsonwebtoken": "^8.5.1",
     "knex": "^0.16.3",
     "lodash": "^4.17.11",
     "nodemon": "^1.18.10",
