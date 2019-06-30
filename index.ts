@@ -12,6 +12,7 @@ const express = require('express')
 const app = express()
 const cookieParser = require('cookie-parser')
 const expressjwt = require('express-jwt')
+const { body, check, validationResult } = require('express-validator')
 
 const saltRounds = 10
 
@@ -45,6 +46,7 @@ app.use(
             '/specialities',
             '/doctors/specialities',
             /^\/doctors\/description\/.*/,
+            /^\/doctor\/.*/,
             /^\/subscription\/.*/,
             '/therapies/symptoms',
             '/acuity/appointment-types',
@@ -94,6 +96,7 @@ function logRequestStart(req: Request, res: Response, next: NextFunction) {
 app.get('/',  (req, res) => res.send('yao api'))
 
 app.get('/doctors', (req, res) => {
+    // TODO this returns no doctor if the join fails due to not existing doctorspecialities. maybe get doctors and afertwards merge the specialities
     knex.select().from('doctorprofile')
         .innerJoin('doctorspeciality', 'doctorprofile.iddoctorprofile' ,'doctorspeciality.iddoctorprofile')
         .innerJoin('speciality', 'doctorspeciality.idspeciality', 'speciality.idspeciality')
@@ -102,8 +105,34 @@ app.get('/doctors', (req, res) => {
         })
         .catch(err => {
             console.error(err)
-            res.status(404).send(err)
+            return res.status(404).send(err)
         })
+})
+
+app.get('/doctor/:iduser', (req, res) => {
+    knex.select()
+        .from('doctorprofile')
+        .innerJoin('doctorspeciality', 'doctorprofile.iddoctorprofile' ,'doctorspeciality.iddoctorprofile')
+        .innerJoin('speciality', 'doctorspeciality.idspeciality', 'speciality.idspeciality')
+        .where('doctorprofile.iduser', req.params.iduser)
+        .then(data => {
+            // data can be empty if the doctor has no specialites selected
+            if(data.length === 0) {
+                return knex.select()
+                    .from('doctorprofile')
+                    .where('doctorprofile.iduser', req.params.iduser)
+                    .then( data => {
+                        return res.send(mergeDocs(data))
+                    })
+            } else {
+                return res.send(mergeDocs(data))
+            }
+        })
+        .catch(err => {
+            console.error(err)
+            return res.status(404).send(err)
+        })
+
 })
 
 app.get('/symptoms', (req, res) => {
@@ -111,7 +140,7 @@ app.get('/symptoms', (req, res) => {
         .then(data => res.send(data))
         .catch(err => {
             console.error(err)
-            res.status(404).send(err)
+            return res.status(404).send(err)
         })
 })
 
@@ -120,7 +149,7 @@ app.get('/specialities', (req, res) => {
         .then( data => res.send(data))
         .catch(err => {
             console.error(err)
-            res.status(404).send(err)
+            return res.status(404).send(err)
         })
 })
 
@@ -129,7 +158,7 @@ app.get('/doctors/description/:iddoctorprofile', (req, res) => {
         .then( data => res.send(data))
         .catch(err => {
             console.error(err)
-            res.status(404).send(err)
+            return res.status(404).send(err)
         })
 })
 
@@ -144,10 +173,10 @@ app.get('/doctors/specialities', (req, res) => {
         where speciality = '${therapie}')`))
     }
     Promise.all(queries).then(data => {
-        res.send(mergeDocs(data.map(data => data.rows)))
+        return res.send(mergeDocs(data.map(data => data.rows)))
     }).catch(error => {
         console.log(error)
-        res.status(404).send(error)
+        return res.status(404).send(error)
     })
 })
 
@@ -156,7 +185,7 @@ app.post('/subscription/:email', (req, res) => {
         .then(data => res.send(data))
         .catch(err => {
             console.error(err)
-            res.status(404).send(err)
+            return res.status(404).send(err)
         })
 })
 
@@ -178,11 +207,99 @@ app.get('/therapies/symptoms', (req, res) => {
                 specialities: symptomArray.map(data => data.speciality)
             }
         })
-        res.send(result)
+        return res.send(result)
     }).catch(err => {
         console.error(err)
-        res.status(404).send(err)
+        return res.status(404).send(err)
     })
+})
+
+app.post('/doctor/:iduser', async (req, res) => {
+    // TODO use express validator to verifiy the input
+    const doctor = req.body.doctor[0]
+    const iduser = doctor.iduser
+    const loggedInUser = req.params.iduser
+    const iddoctorprofile = doctor.iddoctorprofile
+
+    // TODO check if this check is sufficent
+    if (iduser === loggedInUser) {
+        // we want to remove these keys because these dont belong onto the user object or should not be updated
+        for(const key of ['iduser', 'speciality', 'iddoctorspeciality', 'idspeciality',  'iddoctorprofile']) {
+            delete doctor[key]
+        }
+
+        const query = new URLSearchParams([['key', process.env.LOCATIONIQ_APIKEY], ['street', `${doctor.street} ${doctor.housenumber}`], ['city', doctor.city], ['postalcode', doctor.zipcode], ['format', 'json']]);
+        const geo = await got(`https://eu1.locationiq.com/v1/search.php?`, {query}).catch(e => console.log(e))
+        console.log(geo.body)
+        if (geo.length > 0) {
+            // need to convert this so that knex can insert a POINT
+            doctor.latlong = knex.raw(`POINT(${geo.lat}, ${geo.lon})`)
+        } else {
+            // need to convert this so that knex can insert a POINT
+            doctor.latlong = knex.raw(`POINT(${doctor.latlong.x}, ${doctor.latlong.y})`)
+            return res.send({message: 'Could not find address.'})
+        }
+
+        knex('doctorprofile').where('iddoctorprofile', iddoctorprofile).update(doctor).then( result => {
+            return res.sendStatus(200)
+        }).catch(err => res.send(err))
+    } else {
+        return res.sendStatus(403)
+    }
+
+})
+
+app.post('/description/:iduser', async (req, res) => {
+    const descriptions = req.body.descriptions
+    try {
+        for (const description of descriptions) {
+            // if it doesnt exits add the new one
+            if (description.iddescription === null) {
+                await knex('description').insert({
+                    iddoctorprofile: description.iddoctorprofile,
+                    header: description.header,
+                    body: description.body
+                })
+            } else {
+                // udpate the existing descriptions
+                await knex('description').where('iddescription', description.iddescription).update({
+                    header: description.header,
+                    body: description.body
+                })
+            }
+        }
+        return res.sendStatus(200)
+    } catch (e) {
+        return res.send(e)
+    }
+})
+
+app.post('/description/delete/:iduser', (req, res) => {
+    const description = req.body.description
+    if(description.iddescription !== null) {
+        knex('description').where('iddescription ', description.iddescription).del().then(result => {
+            return res.sendStatus(200)
+        }).catch(error => res.send(error))
+    }
+})
+
+app.post('/specialities/:iduser/:iddoctorprofile', async (req, res) => {
+    const specialities = req.body.specialities
+    const iddoctorprofile = req.params.iddoctorprofile
+    const completeSpecialities = []
+    for(const speciality of specialities) {
+        completeSpecialities.push(await knex('speciality').where('speciality', speciality))
+    }
+    const doctorspecialies = await knex('doctorspeciality').where('iddoctorprofile', iddoctorprofile)
+    for (const doctorspec of doctorspecialies) {
+        await knex('doctorspeciality').where('iddoctorspeciality', doctorspec.iddoctorspeciality).del()
+    }
+
+    for(const speciality of completeSpecialities) {
+        await knex('doctorspeciality').insert({iddoctorprofile, idspeciality: speciality[0].idspeciality})
+    }
+    return res.sendStatus(200)
+
 })
 
 app.post('/users/register', (req, res) => {
@@ -200,7 +317,7 @@ app.post('/users/register', (req, res) => {
                     .then(result => res.send(result))
                     .catch(err => res.status(404).send(err))
             } else {
-                res.status(404).send(err)
+                return res.status(404).send(err)
             }
         })
     }
@@ -234,7 +351,7 @@ app.post('/auth/login', (req, res) => {
                         return res.status(500).json({type: 'error', message: 'bcrypt error', err})
                     })
                 } else {
-                    res.status(403).json({type: 'error', message: 'Wrong email or password'})
+                    return res.status(403).json({type: 'error', message: 'Wrong email or password'})
                 }
             })
     }
@@ -250,11 +367,10 @@ app.get('/me', (req, res) => {
         if (error) {
             return res.status(403).json({type: 'error', message: 'Provided token is invalid.', error})
         }
-        console.log(result)
         return res.json({
             type: 'success',
             message: 'Provided token is valid.',
-            result
+            user: result.user
         })
     })
 })
@@ -278,7 +394,7 @@ app.get('/acuity/appointment-types', (req, res) => {
         .then(response => res.send(response.body))
         .catch(err => {
             console.error(err)
-            res.status(404).send(err)
+            return res.status(404).send(err)
         })
 })
 
@@ -289,7 +405,7 @@ app.get('/acuity/availability/dates', (req, res) => {
         .then(response => res.send(response.body))
         .catch(err => {
             console.error(err)
-            res.status(404).send(err)
+            return res.status(404).send(err)
         })
 
 })
@@ -301,7 +417,7 @@ app.get('/acuity/availability/times',  (req, res) => {
         .then(response => res.send(response.body))
         .catch(err => {
             console.error(err)
-            res.status(404).send(err)
+            return res.status(404).send(err)
         })
 })
 
@@ -310,6 +426,6 @@ app.post('/acuity/appointments',(req, res) => {
         .then(response => res.send(response.body))
         .catch(err => {
             console.error(err)
-            res.status(404).send(err)
+            return res.status(404).send(err)
         })
 })
