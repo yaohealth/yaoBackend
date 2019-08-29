@@ -220,7 +220,6 @@ app.post('/doctor/:iduser', async (req, res) => {
     const iduser = doctor.iduser
     const loggedInUser = req.params.iduser
     const iddoctorprofile = doctor.iddoctorprofile
-
     // TODO check if this check is sufficent
     if (iduser === loggedInUser) {
         // we want to remove these keys because these dont belong onto the user object or should not be updated
@@ -230,14 +229,15 @@ app.post('/doctor/:iduser', async (req, res) => {
 
         const query = new URLSearchParams([['key', process.env.LOCATIONIQ_APIKEY], ['street', `${doctor.street} ${doctor.housenumber}`], ['city', doctor.city], ['postalcode', doctor.zipcode], ['format', 'json']]);
         const geo = await got(`https://eu1.locationiq.com/v1/search.php?`, {query}).catch(e => console.log(e))
+        geo.body = JSON.parse(geo.body)
         console.log(geo.body)
-        if (geo.length > 0) {
+        if (geo.body.length > 0) {
             // need to convert this so that knex can insert a POINT
-            doctor.latlong = knex.raw(`POINT(${geo.lat}, ${geo.lon})`)
+            doctor.latlong = knex.raw(`POINT(${geo.body[0].lat}, ${geo.body[0].lon})`)
         } else {
             // need to convert this so that knex can insert a POINT
             doctor.latlong = knex.raw(`POINT(${doctor.latlong.x}, ${doctor.latlong.y})`)
-            return res.send({message: 'Could not find address.'})
+            return res.status(403).send({message: 'Could not find address.'})
         }
 
         knex('doctorprofile').where('iddoctorprofile', iddoctorprofile).update(doctor).then( result => {
