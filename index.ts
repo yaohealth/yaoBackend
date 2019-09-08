@@ -48,6 +48,7 @@ app.use(
             /^\/doctors\/description\/.*/,
             /^\/doctor\/.*/,
             /^\/subscription\/.*/,
+            /^\/doctor\/bydocid\/*/,
             '/therapies/symptoms',
             '/acuity/appointment-types',
             '/acuity/availability/dates',
@@ -96,17 +97,52 @@ function logRequestStart(req: Request, res: Response, next: NextFunction) {
 app.get('/',  (req, res) => res.send('yao api'))
 
 app.get('/doctors', (req, res) => {
+    const query = qs.parse(req.query)
     // TODO this returns no doctor if the join fails due to not existing doctorspecialities. maybe get doctors and afertwards merge the specialities
     knex.select().from('doctorprofile')
         .innerJoin('doctorspeciality', 'doctorprofile.iddoctorprofile' ,'doctorspeciality.iddoctorprofile')
         .innerJoin('speciality', 'doctorspeciality.idspeciality', 'speciality.idspeciality')
         .then( data => {
-            return res.send(mergeDocs(data))
+            const result = mergeDocs(data)
+            const reduced = []
+            if(typeof query.Limit === 'number') {
+                for (let i = 0; i < query.Limit; i++) {
+                    reduced.push(result.splice(Math.ceil(Math.random() * 10) % result.length, 1)[0])
+                }
+                return res.send(reduced)
+            } else {
+                return res.send(result)
+            }
+        }).catch(err => {
+            console.error(err)
+            return res.status(404).send(err)
+        })
+})
+
+app.get('/doctor/bydocid/:iddoctorprofile', (req, res) => {
+    knex.select()
+        .from('doctorprofile')
+        .innerJoin('doctorspeciality', 'doctorprofile.iddoctorprofile' ,'doctorspeciality.iddoctorprofile')
+        .innerJoin('speciality', 'doctorspeciality.idspeciality', 'speciality.idspeciality')
+        .where('doctorprofile.iddoctorprofile', req.params.iddoctorprofile)
+        .then(data => {
+            // data can be empty if the doctor has no specialites selected
+            if(data.length === 0) {
+                return knex.select()
+                    .from('doctorprofile')
+                    .where('doctorprofile.iddoctorprofile', req.params.iddoctorprofile)
+                    .then( data => {
+                        return res.send(mergeDocs(data))
+                    })
+            } else {
+                return res.send(mergeDocs(data))
+            }
         })
         .catch(err => {
             console.error(err)
             return res.status(404).send(err)
         })
+
 })
 
 app.get('/doctor/:iduser', (req, res) => {
