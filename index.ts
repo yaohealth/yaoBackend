@@ -105,7 +105,8 @@ app.get('/doctors', (req, res) => {
         .then( data => {
             const result = mergeDocs(data)
             const reduced = []
-            if(typeof query.Limit === 'number') {
+            if(query.Limit && (typeof query.Limit === 'number' || !isNaN(parseInt(query.Limit)) )) {
+                query.Limit = parseInt(query.Limit)
                 for (let i = 0; i < query.Limit; i++) {
                     reduced.push(result.splice(Math.ceil(Math.random() * 10) % result.length, 1)[0])
                 }
